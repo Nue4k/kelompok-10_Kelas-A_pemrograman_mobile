@@ -3,5 +3,5 @@
 ## Anggota Kelompok
 
 1. Akhmad Zaki Hasrul - D121241046 - @Nue4k
-2.
-3.
+2. A. Tyas Nur Atda - D121241031 - @yaaaseu
+3. 
