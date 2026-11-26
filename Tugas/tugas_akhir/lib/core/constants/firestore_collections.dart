@@ -10,7 +10,6 @@ abstract final class FirestoreCollections {
 
   // Workspace subcollections
   static const String members = 'members';
-  static const String jobDescriptions = 'jobDescriptions';
   static const String joinRequests = 'joinRequests';
   static const String activityLogs = 'activityLogs';
   static const String tasks = 'tasks';
@@ -20,7 +19,6 @@ abstract final class FirestoreCollections {
   static const String comments = 'comments';
   static const String statusHistory = 'statusHistory';
   static const String reviews = 'reviews';
-  static const String contributors = 'contributors';
   static const String picChangeRequests = 'picChangeRequests';
   static const String assignmentHistory = 'assignmentHistory';
 }
