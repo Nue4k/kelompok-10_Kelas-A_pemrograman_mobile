@@ -26,4 +26,26 @@ void main() {
     expect(restored.phoneNumber, '08123456789');
     expect(restored.createdAt, createdAt);
   });
+
+  test('UserModel copyWith updates fields and clears nullable fields', () {
+    const user = UserModel(
+      id: 'uid-1',
+      fullName: 'Akhmad Zaki',
+      email: 'zaki@example.com',
+      profilePicture: 'https://example.com/avatar.png',
+      phoneNumber: '08123456789',
+    );
+
+    final updated = user.copyWith(
+      fullName: 'Zaki Baru',
+      clearProfilePicture: true,
+      clearPhoneNumber: true,
+    );
+
+    expect(updated.id, 'uid-1');
+    expect(updated.fullName, 'Zaki Baru');
+    expect(updated.email, 'zaki@example.com');
+    expect(updated.profilePicture, isNull);
+    expect(updated.phoneNumber, isNull);
+  });
 }
