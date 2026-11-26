@@ -43,4 +43,24 @@ class UserModel {
       'createdAt': dateToFirestore(createdAt),
     };
   }
+
+  UserModel copyWith({
+    String? fullName,
+    String? email,
+    String? profilePicture,
+    String? phoneNumber,
+    DateTime? createdAt,
+    bool clearProfilePicture = false,
+    bool clearPhoneNumber = false,
+  }) {
+    return UserModel(
+      id: id,
+      fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
+      profilePicture:
+          clearProfilePicture ? null : (profilePicture ?? this.profilePicture),
+      phoneNumber: clearPhoneNumber ? null : (phoneNumber ?? this.phoneNumber),
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
