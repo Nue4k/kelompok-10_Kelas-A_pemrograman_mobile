@@ -1,4 +1,5 @@
 export 'activity_log_model.dart';
+export 'dashboard_summary_model.dart';
 export 'enums.dart';
 export 'join_request_model.dart';
 export 'notification_model.dart';
@@ -6,6 +7,7 @@ export 'pic_change_request_model.dart';
 export 'task_assignment_history_model.dart';
 export 'task_attachment_model.dart';
 export 'task_comment_model.dart';
+export 'task_filter.dart';
 export 'task_model.dart';
 export 'task_review_model.dart';
 export 'task_status_history_model.dart';
