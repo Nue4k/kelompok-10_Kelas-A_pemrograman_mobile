@@ -83,5 +83,48 @@ void main() {
       expect(archivedTask.isOverdue, isFalse);
       expect(archivedTask.isArchived, isTrue);
     });
+
+    test('copyWith updates fields and supports clear flags', () {
+      final start = DateTime(2026, 11, 20);
+      final deadline = DateTime(2026, 11, 30);
+      final archived = DateTime(2026, 11, 25);
+
+      final original = TaskModel(
+        id: 't1',
+        workspaceId: 'ws-1',
+        picMemberId: 'u2',
+        createdBy: 'u1',
+        title: 'Initial title',
+        description: 'Initial desc',
+        startDate: start,
+        deadline: deadline,
+        priority: TaskPriority.medium,
+        status: TaskStatus.todo,
+        archivedAt: archived,
+      );
+
+      final updated = original.copyWith(
+        title: 'Updated title',
+        picMemberId: 'u3',
+        priority: TaskPriority.high,
+        status: TaskStatus.inProgress,
+        clearDescription: true,
+        clearStartDate: true,
+        clearDeadline: true,
+        clearArchivedAt: true,
+      );
+
+      expect(updated.id, 't1');
+      expect(updated.workspaceId, 'ws-1');
+      expect(updated.title, 'Updated title');
+      expect(updated.picMemberId, 'u3');
+      expect(updated.priority, TaskPriority.high);
+      expect(updated.status, TaskStatus.inProgress);
+      expect(updated.description, isNull);
+      expect(updated.startDate, isNull);
+      expect(updated.deadline, isNull);
+      expect(updated.archivedAt, isNull);
+      expect(updated.isArchived, isFalse);
+    });
   });
 }

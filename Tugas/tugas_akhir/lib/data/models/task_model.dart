@@ -38,6 +38,42 @@ class TaskModel {
 
   bool get isArchived => archivedAt != null;
 
+  TaskModel copyWith({
+    String? id,
+    String? workspaceId,
+    String? picMemberId,
+    String? createdBy,
+    String? title,
+    String? description,
+    bool clearDescription = false,
+    DateTime? startDate,
+    bool clearStartDate = false,
+    DateTime? deadline,
+    bool clearDeadline = false,
+    TaskPriority? priority,
+    TaskStatus? status,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return TaskModel(
+      id: id ?? this.id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      picMemberId: picMemberId ?? this.picMemberId,
+      createdBy: createdBy ?? this.createdBy,
+      title: title ?? this.title,
+      description: clearDescription ? null : (description ?? this.description),
+      startDate: clearStartDate ? null : (startDate ?? this.startDate),
+      deadline: clearDeadline ? null : (deadline ?? this.deadline),
+      priority: priority ?? this.priority,
+      status: status ?? this.status,
+      archivedAt: clearArchivedAt ? null : (archivedAt ?? this.archivedAt),
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   bool get isOverdue {
     if (deadline == null || status == TaskStatus.done || isArchived) {
       return false;
