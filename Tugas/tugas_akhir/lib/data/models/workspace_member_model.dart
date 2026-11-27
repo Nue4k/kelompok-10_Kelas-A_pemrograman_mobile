@@ -53,4 +53,24 @@ class WorkspaceMemberModel {
       'removedAt': dateToFirestore(removedAt),
     };
   }
+
+  WorkspaceMemberModel copyWith({
+    String? workspaceId,
+    String? userId,
+    MemberRole? role,
+    MemberStatus? status,
+    DateTime? joinedAt,
+    DateTime? removedAt,
+    bool clearRemovedAt = false,
+  }) {
+    return WorkspaceMemberModel(
+      id: id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      userId: userId ?? this.userId,
+      role: role ?? this.role,
+      status: status ?? this.status,
+      joinedAt: joinedAt ?? this.joinedAt,
+      removedAt: clearRemovedAt ? null : (removedAt ?? this.removedAt),
+    );
+  }
 }

@@ -18,6 +18,37 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= 100;
     }
 
+    function workspaceDoc(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId);
+    }
+
+    function memberDoc(workspaceId, userId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(userId);
+    }
+
+    function isActiveMember(workspaceId) {
+      return isSignedIn()
+        && exists(memberDoc(workspaceId, request.auth.uid))
+        && get(memberDoc(workspaceId, request.auth.uid)).data.status == 'active';
+    }
+
+    function isWorkspacePm(workspaceId) {
+      return isActiveMember(workspaceId)
+        && get(memberDoc(workspaceId, request.auth.uid)).data.role == 'pm';
+    }
+
+    function isValidWorkspaceName(value) {
+      return value is string && value.size() > 0 && value.size() <= 100;
+    }
+
+    function isValidDescription(value) {
+      return value == null || (value is string && value.size() <= 500);
+    }
+
+    function isValidInviteCode(value) {
+      return value is string && value.size() == 8;
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if false;
@@ -50,7 +81,180 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Deny all other collections by default; granular rules will be added in Run 3-5.
+    match /inviteCodes/{code} {
+      allow get: if isSignedIn();
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'workspaceId',
+          'createdBy',
+          'createdAt'
+        ])
+        && request.resource.data.workspaceId is string
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && (
+          isWorkspacePm(request.resource.data.workspaceId)
+          || getAfter(workspaceDoc(request.resource.data.workspaceId)).data.createdBy == request.auth.uid
+        );
+
+      allow update: if false;
+      allow delete: if isWorkspacePm(resource.data.workspaceId);
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get: if isActiveMember(workspaceId);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'workspaceName',
+          'description',
+          'inviteCode',
+          'status',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidWorkspaceName(request.resource.data.workspaceName)
+        && isValidDescription(request.resource.data.description)
+        && isValidInviteCode(request.resource.data.inviteCode)
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isWorkspacePm(workspaceId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'workspaceName',
+          'description',
+          'inviteCode',
+          'status',
+          'updatedAt'
+        ])
+        && isValidWorkspaceName(request.resource.data.workspaceName)
+        && isValidDescription(request.resource.data.description)
+        && isValidInviteCode(request.resource.data.inviteCode)
+        && request.resource.data.status in ['active', 'archived']
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+
+      match /members/{userId} {
+        allow get: if isActiveMember(workspaceId) || isOwner(userId);
+        allow list: if isActiveMember(workspaceId);
+
+        allow create: if request.resource.data.keys().hasOnly([
+            'workspaceId',
+            'userId',
+            'role',
+            'status',
+            'joinedAt',
+            'removedAt'
+          ])
+          && request.resource.data.workspaceId == workspaceId
+          && request.resource.data.userId == userId
+          && request.resource.data.status == 'active'
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.removedAt == null
+          && (
+            (
+              isOwner(userId)
+              && request.resource.data.role == 'pm'
+              && getAfter(workspaceDoc(workspaceId)).data.createdBy == request.auth.uid
+            )
+            || (
+              isWorkspacePm(workspaceId)
+              && request.resource.data.role == 'member'
+            )
+          );
+
+        allow update: if (
+            isWorkspacePm(workspaceId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'role',
+              'status',
+              'joinedAt',
+              'removedAt'
+            ])
+            && request.resource.data.role in ['pm', 'member']
+            && request.resource.data.status in ['active', 'removed']
+          ) || (
+            isOwner(userId)
+            && resource.data.status == 'active'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'removedAt'
+            ])
+            && request.resource.data.status == 'removed'
+            && request.resource.data.removedAt == request.time
+          );
+
+        allow delete: if false;
+      }
+
+      match /joinRequests/{userId} {
+        allow get: if isOwner(userId) || isWorkspacePm(workspaceId);
+        allow list: if isWorkspacePm(workspaceId);
+
+        allow create: if isOwner(userId)
+          && !isActiveMember(workspaceId)
+          && exists(workspaceDoc(workspaceId))
+          && get(workspaceDoc(workspaceId)).data.status == 'active'
+          && request.resource.data.keys().hasOnly([
+            'workspaceId',
+            'userId',
+            'status',
+            'requestedAt',
+            'reviewedAt',
+            'reviewedBy'
+          ])
+          && request.resource.data.workspaceId == workspaceId
+          && request.resource.data.userId == userId
+          && request.resource.data.status == 'pending'
+          && request.resource.data.requestedAt == request.time
+          && request.resource.data.reviewedAt == null
+          && request.resource.data.reviewedBy == null;
+
+        allow update: if (
+            isWorkspacePm(workspaceId)
+            && resource.data.status == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'reviewedAt',
+              'reviewedBy'
+            ])
+            && request.resource.data.status in ['approved', 'rejected']
+            && request.resource.data.reviewedAt == request.time
+            && request.resource.data.reviewedBy == request.auth.uid
+          ) || (
+            isOwner(userId)
+            && !isActiveMember(workspaceId)
+            && resource.data.status != 'pending'
+            && exists(workspaceDoc(workspaceId))
+            && get(workspaceDoc(workspaceId)).data.status == 'active'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'requestedAt',
+              'reviewedAt',
+              'reviewedBy'
+            ])
+            && request.resource.data.status == 'pending'
+            && request.resource.data.requestedAt == request.time
+            && request.resource.data.reviewedAt == null
+            && request.resource.data.reviewedBy == null
+          );
+
+        allow delete: if false;
+      }
+    }
+
+    match /{path=**}/members/{userId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Deny all other collections by default; granular rules will be added in Run 4-5.
     match /{document=**} {
       allow read, write: if false;
     }

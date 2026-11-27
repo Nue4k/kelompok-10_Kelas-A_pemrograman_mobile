@@ -54,4 +54,26 @@ class WorkspaceModel {
       'updatedAt': dateToFirestore(updatedAt),
     };
   }
+
+  WorkspaceModel copyWith({
+    String? name,
+    String? description,
+    String? inviteCode,
+    WorkspaceStatus? status,
+    String? createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool clearDescription = false,
+  }) {
+    return WorkspaceModel(
+      id: id,
+      name: name ?? this.name,
+      description: clearDescription ? null : (description ?? this.description),
+      inviteCode: inviteCode ?? this.inviteCode,
+      status: status ?? this.status,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

@@ -51,4 +51,25 @@ class JoinRequestModel {
       'reviewedBy': reviewedBy,
     };
   }
+
+  JoinRequestModel copyWith({
+    String? workspaceId,
+    String? userId,
+    RequestStatus? status,
+    DateTime? requestedAt,
+    DateTime? reviewedAt,
+    String? reviewedBy,
+    bool clearReviewedAt = false,
+    bool clearReviewedBy = false,
+  }) {
+    return JoinRequestModel(
+      id: id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      userId: userId ?? this.userId,
+      status: status ?? this.status,
+      requestedAt: requestedAt ?? this.requestedAt,
+      reviewedAt: clearReviewedAt ? null : (reviewedAt ?? this.reviewedAt),
+      reviewedBy: clearReviewedBy ? null : (reviewedBy ?? this.reviewedBy),
+    );
+  }
 }
