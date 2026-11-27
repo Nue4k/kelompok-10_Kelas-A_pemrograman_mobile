@@ -5,6 +5,7 @@ import '../core/utils/task_status_transition.dart';
 import '../data/models/enums.dart';
 import '../data/models/task_model.dart';
 import '../data/models/workspace_member_model.dart';
+import '../data/repositories/task_collaboration_repository.dart';
 import '../data/repositories/task_repository.dart';
 import '../data/repositories/workspace_member_repository.dart';
 
@@ -13,13 +14,17 @@ import '../data/repositories/workspace_member_repository.dart';
 class TaskService {
   TaskService({
     TaskRepository? taskRepository,
+    TaskCollaborationRepository? collaborationRepository,
     WorkspaceMemberRepository? memberRepository,
     FirebaseAuth? auth,
   })  : _taskRepository = taskRepository ?? TaskRepository(),
+        _collaborationRepository =
+            collaborationRepository ?? TaskCollaborationRepository(),
         _memberRepository = memberRepository ?? WorkspaceMemberRepository(),
         _auth = auth ?? FirebaseAuth.instance;
 
   final TaskRepository _taskRepository;
+  final TaskCollaborationRepository _collaborationRepository;
   final WorkspaceMemberRepository _memberRepository;
   final FirebaseAuth _auth;
 
@@ -293,6 +298,7 @@ class TaskService {
     required String workspaceId,
     required String taskId,
     required TaskStatus newStatus,
+    String? notes,
   }) async {
     final member = await _requireActiveMember(workspaceId);
 
@@ -327,11 +333,17 @@ class TaskService {
       isPic: isPic,
     );
 
+    final trimmedNotes = notes?.trim();
     try {
-      await _taskRepository.updateTaskStatus(
+      await _collaborationRepository.updateTaskStatusWithHistory(
         workspaceId: workspaceId,
         taskId: taskId,
+        changedBy: member.userId,
+        oldStatus: task.status,
         newStatus: newStatus,
+        notes: (trimmedNotes == null || trimmedNotes.isEmpty)
+            ? null
+            : trimmedNotes,
       );
     } on FirebaseException catch (e) {
       throw TaskException.fromFirebase(e);
