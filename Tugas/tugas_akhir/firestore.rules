@@ -49,6 +49,39 @@ service cloud.firestore {
       return value is string && value.size() == 8;
     }
 
+    function isOptionalTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function isTargetActiveMember(workspaceId, userId) {
+      return userId is string
+        && exists(memberDoc(workspaceId, userId))
+        && get(memberDoc(workspaceId, userId)).data.status == 'active';
+    }
+
+    function isValidTaskTitle(value) {
+      return value is string && value.size() > 0 && value.size() <= 150;
+    }
+
+    function isValidTaskDescription(value) {
+      return value == null || (value is string && value.size() <= 2000);
+    }
+
+    function isValidTaskPriority(value) {
+      return value in ['low', 'medium', 'high'];
+    }
+
+    function isValidTaskDateRange(startDate, deadline) {
+      return startDate == null || deadline == null || deadline >= startDate;
+    }
+
+    function isValidTaskStatusTransition(fromStatus, toStatus, isPm) {
+      return (fromStatus == 'todo' && toStatus == 'in_progress')
+        || (fromStatus == 'in_progress' && toStatus == 'in_review')
+        || (fromStatus == 'revision' && toStatus == 'in_progress')
+        || (isPm && fromStatus == 'in_review' && (toStatus == 'done' || toStatus == 'revision'));
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if false;
@@ -248,13 +281,112 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+
+      match /tasks/{taskId} {
+        allow get, list: if isActiveMember(workspaceId);
+
+        allow create: if isWorkspacePm(workspaceId)
+          && request.resource.data.keys().hasOnly([
+            'workspaceId',
+            'picMemberId',
+            'createdBy',
+            'title',
+            'description',
+            'startDate',
+            'deadline',
+            'priority',
+            'status',
+            'archivedAt',
+            'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.workspaceId == workspaceId
+          && request.resource.data.createdBy == request.auth.uid
+          && isTargetActiveMember(workspaceId, request.resource.data.picMemberId)
+          && isValidTaskTitle(request.resource.data.title)
+          && isValidTaskDescription(request.resource.data.description)
+          && isOptionalTimestamp(request.resource.data.startDate)
+          && isOptionalTimestamp(request.resource.data.deadline)
+          && isValidTaskDateRange(
+            request.resource.data.startDate,
+            request.resource.data.deadline
+          )
+          && isValidTaskPriority(request.resource.data.priority)
+          && request.resource.data.status == 'todo'
+          && request.resource.data.archivedAt == null
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if (
+            isWorkspacePm(workspaceId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'picMemberId',
+              'title',
+              'description',
+              'startDate',
+              'deadline',
+              'priority',
+              'status',
+              'archivedAt',
+              'updatedAt'
+            ])
+            && request.resource.data.updatedAt == request.time
+            && isValidTaskTitle(request.resource.data.title)
+            && isValidTaskDescription(request.resource.data.description)
+            && isOptionalTimestamp(request.resource.data.startDate)
+            && isOptionalTimestamp(request.resource.data.deadline)
+            && isValidTaskDateRange(
+              request.resource.data.startDate,
+              request.resource.data.deadline
+            )
+            && isValidTaskPriority(request.resource.data.priority)
+            && isOptionalTimestamp(request.resource.data.archivedAt)
+            && (
+              request.resource.data.picMemberId == resource.data.picMemberId
+              || isTargetActiveMember(workspaceId, request.resource.data.picMemberId)
+            )
+            && (
+              request.resource.data.archivedAt == resource.data.archivedAt
+              || request.resource.data.archivedAt == null
+              || request.resource.data.archivedAt == request.time
+            )
+            && (
+              request.resource.data.status == resource.data.status
+              || (
+                resource.data.archivedAt == null
+                && request.resource.data.archivedAt == null
+                && isValidTaskStatusTransition(
+                  resource.data.status,
+                  request.resource.data.status,
+                  true
+                )
+              )
+            )
+          ) || (
+            isActiveMember(workspaceId)
+            && resource.data.picMemberId == request.auth.uid
+            && resource.data.archivedAt == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'updatedAt'
+            ])
+            && request.resource.data.updatedAt == request.time
+            && isValidTaskStatusTransition(
+              resource.data.status,
+              request.resource.data.status,
+              false
+            )
+          );
+
+        allow delete: if false;
+      }
     }
 
     match /{path=**}/members/{userId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // Deny all other collections by default; granular rules will be added in Run 4-5.
+    // Deny all other collections by default; granular rules will be added in Run 5-6.
     match /{document=**} {
       allow read, write: if false;
     }
