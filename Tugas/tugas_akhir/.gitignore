@@ -55,3 +55,4 @@ ui-debug.log*
 .env
 .env.*
 *.env.json
+rules_test/node_modules/
