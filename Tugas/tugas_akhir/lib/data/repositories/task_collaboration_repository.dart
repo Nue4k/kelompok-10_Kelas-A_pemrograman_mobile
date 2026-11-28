@@ -126,10 +126,12 @@ class TaskCollaborationRepository {
 
   Stream<List<TaskCommentModel>> watchComments(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 100,
+  }) {
     return _commentsRef(workspaceId, taskId)
         .orderBy('createdAt', descending: false)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs.map(TaskCommentModel.fromFirestore).toList());
   }
@@ -181,10 +183,12 @@ class TaskCollaborationRepository {
 
   Stream<List<TaskAttachmentModel>> watchAttachments(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     return _attachmentsRef(workspaceId, taskId)
         .orderBy('uploadedAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snap) => snap.docs.map(TaskAttachmentModel.fromFirestore).toList(),
@@ -235,10 +239,12 @@ class TaskCollaborationRepository {
 
   Stream<List<TaskStatusHistoryModel>> watchStatusHistory(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     return _statusHistoryRef(workspaceId, taskId)
         .orderBy('changedAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snap) =>
@@ -347,10 +353,12 @@ class TaskCollaborationRepository {
 
   Stream<List<TaskReviewModel>> watchReviews(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     return _reviewsRef(workspaceId, taskId)
         .orderBy('submittedAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs.map(TaskReviewModel.fromFirestore).toList());
   }
@@ -403,10 +411,12 @@ class TaskCollaborationRepository {
 
   Stream<List<PicChangeRequestModel>> watchPicChangeRequests(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     return _picRequestsRef(workspaceId, taskId)
         .orderBy('requestedAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snap) => snap.docs.map(PicChangeRequestModel.fromFirestore).toList(),
@@ -465,10 +475,12 @@ class TaskCollaborationRepository {
 
   Stream<List<TaskAssignmentHistoryModel>> watchAssignmentHistory(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     return _assignmentHistoryRef(workspaceId, taskId)
         .orderBy('changedAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snap) =>

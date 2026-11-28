@@ -143,7 +143,14 @@ class WorkspaceRepository {
     if (activeWorkspaceIds.isEmpty) return const [];
 
     final workspaces = await Future.wait(
-      activeWorkspaceIds.map(getWorkspaceById),
+      activeWorkspaceIds.map((id) async {
+        try {
+          return await getWorkspaceById(id);
+        } on FirebaseException catch (e) {
+          if (e.code == 'permission-denied') return null;
+          rethrow;
+        }
+      }),
     );
     return workspaces.whereType<WorkspaceModel>().toList();
   }

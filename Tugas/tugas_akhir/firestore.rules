@@ -155,8 +155,12 @@ service cloud.firestore {
           && isOptionalString(request.resource.data.workspaceId)
           && isOptionalString(request.resource.data.taskId)
           && (
-            request.resource.data.workspaceId == null
-            || isActiveMember(request.resource.data.workspaceId)
+            isOwner(userId)
+            || (
+              request.resource.data.workspaceId is string
+              && isActiveMember(request.resource.data.workspaceId)
+              && isTargetActiveMember(request.resource.data.workspaceId, userId)
+            )
           )
           && request.resource.data.type is string
           && request.resource.data.type.size() > 0

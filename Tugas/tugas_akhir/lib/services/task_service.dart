@@ -199,20 +199,34 @@ class TaskService {
     }
   }
 
+  Stream<T> _mapStreamErrors<T>(Stream<T> stream) {
+    return stream.handleError((Object error, StackTrace stackTrace) {
+      if (error is FirebaseException) {
+        Error.throwWithStackTrace(
+          TaskException.fromFirebase(error),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
   Stream<TaskModel?> watchTask(String workspaceId, String taskId) {
     _requireUid();
-    return _taskRepository.watchTask(workspaceId, taskId);
+    return _mapStreamErrors(_taskRepository.watchTask(workspaceId, taskId));
   }
 
   Future<List<TaskModel>> getTasks(
     String workspaceId, {
     bool includeArchived = false,
+    int limit = 200,
   }) async {
     _requireUid();
     try {
       return await _taskRepository.getTasks(
         workspaceId,
         includeArchived: includeArchived,
+        limit: limit,
       );
     } on FirebaseException catch (e) {
       throw TaskException.fromFirebase(e);
@@ -222,11 +236,15 @@ class TaskService {
   Stream<List<TaskModel>> watchTasks(
     String workspaceId, {
     bool includeArchived = false,
+    int limit = 200,
   }) {
     _requireUid();
-    return _taskRepository.watchTasks(
-      workspaceId,
-      includeArchived: includeArchived,
+    return _mapStreamErrors(
+      _taskRepository.watchTasks(
+        workspaceId,
+        includeArchived: includeArchived,
+        limit: limit,
+      ),
     );
   }
 

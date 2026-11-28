@@ -78,12 +78,13 @@ class TaskRepository {
   Future<List<TaskModel>> getTasks(
     String workspaceId, {
     bool includeArchived = false,
+    int limit = 200,
   }) async {
     Query<Map<String, dynamic>> query = _tasksRef(workspaceId);
     if (!includeArchived) {
       query = query.where('archivedAt', isNull: true);
     }
-    final snap = await query.get();
+    final snap = await query.limit(limit).get();
     return snap.docs.map(TaskModel.fromFirestore).toList();
   }
 
@@ -91,12 +92,13 @@ class TaskRepository {
   Stream<List<TaskModel>> watchTasks(
     String workspaceId, {
     bool includeArchived = false,
+    int limit = 200,
   }) {
     Query<Map<String, dynamic>> query = _tasksRef(workspaceId);
     if (!includeArchived) {
       query = query.where('archivedAt', isNull: true);
     }
-    return query.snapshots().map(
+    return query.limit(limit).snapshots().map(
           (snap) => snap.docs.map(TaskModel.fromFirestore).toList(),
         );
   }
@@ -145,18 +147,6 @@ class TaskRepository {
     }
 
     await _tasksRef(workspaceId).doc(taskId).update(updates);
-  }
-
-  /// Updates the task status.
-  Future<void> updateTaskStatus({
-    required String workspaceId,
-    required String taskId,
-    required TaskStatus newStatus,
-  }) async {
-    await _tasksRef(workspaceId).doc(taskId).update({
-      'status': newStatus.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
   }
 
   /// Soft-archives a task by setting `archivedAt`.

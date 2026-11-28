@@ -84,7 +84,7 @@ class WorkspaceService {
     return uid;
   }
 
-  Future<void> _ensureNotLastPm(
+  Future<List<String>> _getActivePmIdsAndCheckNotLast(
     String workspaceId,
     String targetUserId,
   ) async {
@@ -92,15 +92,19 @@ class WorkspaceService {
       workspaceId,
       activeOnly: true,
     );
-    final activePms = activeMembers.where((m) => m.isPm).toList();
-    final isTargetPm = activePms.any((m) => m.userId == targetUserId);
-    if (isTargetPm && activePms.length <= 1) {
+    final activePmIds = activeMembers
+        .where((m) => m.isPm)
+        .map((m) => m.userId)
+        .toList();
+    final isTargetPm = activePmIds.contains(targetUserId);
+    if (isTargetPm && activePmIds.length <= 1) {
       throw const WorkspaceException(
         code: 'last-pm-protected',
         message:
             'Workspace harus memiliki minimal 1 PM aktif. Tunjuk PM lain terlebih dahulu.',
       );
     }
+    return activePmIds;
   }
 
   Future<WorkspaceModel> createWorkspace({
@@ -127,9 +131,21 @@ class WorkspaceService {
     return _workspaceRepository.getWorkspaceById(workspaceId);
   }
 
+  Stream<T> _mapStreamErrors<T>(Stream<T> stream) {
+    return stream.handleError((Object error, StackTrace stackTrace) {
+      if (error is FirebaseException) {
+        Error.throwWithStackTrace(
+          WorkspaceException.fromFirebase(error),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
   Stream<WorkspaceModel?> watchWorkspace(String workspaceId) {
     _requireUid();
-    return _workspaceRepository.watchWorkspace(workspaceId);
+    return _mapStreamErrors(_workspaceRepository.watchWorkspace(workspaceId));
   }
 
   Future<List<WorkspaceModel>> getMyWorkspaces() {
@@ -139,7 +155,7 @@ class WorkspaceService {
 
   Stream<List<WorkspaceModel>> watchMyWorkspaces() {
     final uid = _requireUid();
-    return _workspaceRepository.watchWorkspacesForUser(uid);
+    return _mapStreamErrors(_workspaceRepository.watchWorkspacesForUser(uid));
   }
 
   Future<void> updateWorkspace({
@@ -213,7 +229,9 @@ class WorkspaceService {
 
   Stream<List<JoinRequestModel>> watchPendingJoinRequests(String workspaceId) {
     _requireUid();
-    return _memberRepository.watchPendingJoinRequests(workspaceId);
+    return _mapStreamErrors(
+      _memberRepository.watchPendingJoinRequests(workspaceId),
+    );
   }
 
   Future<void> approveJoinRequest({
@@ -261,7 +279,9 @@ class WorkspaceService {
     bool activeOnly = true,
   }) {
     _requireUid();
-    return _memberRepository.watchMembers(workspaceId, activeOnly: activeOnly);
+    return _mapStreamErrors(
+      _memberRepository.watchMembers(workspaceId, activeOnly: activeOnly),
+    );
   }
 
   Future<void> changeMemberRole({
@@ -270,14 +290,16 @@ class WorkspaceService {
     required MemberRole newRole,
   }) async {
     await _requireActivePm(workspaceId);
+    List<String>? activePmIds;
     if (newRole != MemberRole.pm) {
-      await _ensureNotLastPm(workspaceId, userId);
+      activePmIds = await _getActivePmIdsAndCheckNotLast(workspaceId, userId);
     }
     try {
       await _memberRepository.updateMemberRole(
         workspaceId: workspaceId,
         userId: userId,
         newRole: newRole,
+        activePmUserIds: activePmIds,
       );
     } on FirebaseException catch (e) {
       throw WorkspaceException.fromFirebase(e);
@@ -289,11 +311,15 @@ class WorkspaceService {
     required String userId,
   }) async {
     await _requireActivePm(workspaceId);
-    await _ensureNotLastPm(workspaceId, userId);
+    final activePmIds = await _getActivePmIdsAndCheckNotLast(
+      workspaceId,
+      userId,
+    );
     try {
       await _memberRepository.removeMember(
         workspaceId: workspaceId,
         userId: userId,
+        activePmUserIds: activePmIds,
       );
     } on FirebaseException catch (e) {
       throw WorkspaceException.fromFirebase(e);
@@ -309,11 +335,12 @@ class WorkspaceService {
         message: 'Anda bukan anggota aktif workspace ini.',
       );
     }
-    await _ensureNotLastPm(workspaceId, uid);
+    final activePmIds = await _getActivePmIdsAndCheckNotLast(workspaceId, uid);
     try {
       await _memberRepository.removeMember(
         workspaceId: workspaceId,
         userId: uid,
+        activePmUserIds: activePmIds,
       );
     } on FirebaseException catch (e) {
       throw WorkspaceException.fromFirebase(e);
