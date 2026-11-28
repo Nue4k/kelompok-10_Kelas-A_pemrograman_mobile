@@ -334,5 +334,204 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(
       updateDoc(doc(memDb, 'users/mem-1/notifications/n1'), { isRead: true }),
     );
+
+    // Outsider cannot spam notification with workspaceId: null or foreign workspace
+    await assertFails(
+      setDoc(doc(outsiderDb, 'users/mem-1/notifications/spam-1'), {
+        userId: 'mem-1',
+        workspaceId: null,
+        taskId: null,
+        type: 'task_assigned',
+        message: 'Spam',
+        isRead: false,
+        createdAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      setDoc(doc(outsiderDb, 'users/mem-1/notifications/spam-2'), {
+        userId: 'mem-1',
+        workspaceId: 'ws-1',
+        taskId: 't1',
+        type: 'task_assigned',
+        message: 'Spam',
+        isRead: false,
+        createdAt: serverTimestamp(),
+      }),
+    );
+
+    // Active workspace member can notify fellow active member, owner can notify self
+    const pmDb = testEnv.authenticatedContext('pm-1').firestore();
+    await assertSucceeds(
+      setDoc(doc(pmDb, 'users/mem-1/notifications/n2'), {
+        userId: 'mem-1',
+        workspaceId: 'ws-1',
+        taskId: 't1',
+        type: 'task_assigned',
+        message: 'Valid workspace notif',
+        isRead: false,
+        createdAt: serverTimestamp(),
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(memDb, 'users/mem-1/notifications/n3'), {
+        userId: 'mem-1',
+        workspaceId: null,
+        taskId: null,
+        type: 'deadline_reminder',
+        message: 'Self reminder',
+        isRead: false,
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('reviews, picChangeRequests, assignmentHistory, and activityLogs rules enforced', async () => {
+    await seedWorkspaceWithPmAndMember();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'workspaces/ws-1/members/mem-2'), {
+        workspaceId: 'ws-1',
+        userId: 'mem-2',
+        role: 'member',
+        status: 'active',
+        joinedAt: serverTimestamp(),
+        removedAt: null,
+      });
+      await setDoc(doc(db, 'workspaces/ws-1/tasks/t1'), {
+        workspaceId: 'ws-1',
+        picMemberId: 'mem-1',
+        createdBy: 'pm-1',
+        title: 'Task',
+        description: null,
+        startDate: null,
+        deadline: null,
+        priority: 'medium',
+        status: 'in_progress',
+        archivedAt: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    const pmDb = testEnv.authenticatedContext('pm-1').firestore();
+    const memDb = testEnv.authenticatedContext('mem-1').firestore();
+    const outsiderDb = testEnv.authenticatedContext('outsider').firestore();
+
+    // PIC submits review; member cannot decide; PM cannot request revision without feedback
+    await assertSucceeds(
+      setDoc(doc(memDb, 'workspaces/ws-1/tasks/t1/reviews/r1'), {
+        taskId: 't1',
+        submittedBy: 'mem-1',
+        reviewedBy: null,
+        decision: null,
+        feedback: null,
+        submittedAt: serverTimestamp(),
+        reviewedAt: null,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(memDb, 'workspaces/ws-1/tasks/t1/reviews/r1'), {
+        reviewedBy: 'mem-1',
+        decision: 'approved',
+        feedback: null,
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(pmDb, 'workspaces/ws-1/tasks/t1/reviews/r1'), {
+        reviewedBy: 'pm-1',
+        decision: 'revision',
+        feedback: null,
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(pmDb, 'workspaces/ws-1/tasks/t1/reviews/r1'), {
+        reviewedBy: 'pm-1',
+        decision: 'revision',
+        feedback: 'Tolong perbaiki layout',
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+    // Already decided review cannot be modified again
+    await assertFails(
+      updateDoc(doc(pmDb, 'workspaces/ws-1/tasks/t1/reviews/r1'), {
+        reviewedBy: 'pm-1',
+        decision: 'approved',
+        feedback: 'OK',
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+
+    // PIC change request & assignment history
+    await assertSucceeds(
+      setDoc(doc(memDb, 'workspaces/ws-1/tasks/t1/picChangeRequests/p1'), {
+        taskId: 't1',
+        requestedBy: 'mem-1',
+        currentPicId: 'mem-1',
+        proposedPicId: 'mem-2',
+        status: 'pending',
+        reason: 'Lagi sakit',
+        requestedAt: serverTimestamp(),
+        reviewedBy: null,
+        reviewedAt: null,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(memDb, 'workspaces/ws-1/tasks/t1/picChangeRequests/p1'), {
+        status: 'approved',
+        reviewedBy: 'mem-1',
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(pmDb, 'workspaces/ws-1/tasks/t1/picChangeRequests/p1'), {
+        status: 'approved',
+        reviewedBy: 'pm-1',
+        reviewedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      setDoc(doc(memDb, 'workspaces/ws-1/tasks/t1/assignmentHistory/ah1'), {
+        taskId: 't1',
+        oldPicId: 'mem-1',
+        newPicId: 'mem-2',
+        changedBy: 'mem-1',
+        reason: null,
+        changedAt: serverTimestamp(),
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(pmDb, 'workspaces/ws-1/tasks/t1/assignmentHistory/ah1'), {
+        taskId: 't1',
+        oldPicId: 'mem-1',
+        newPicId: 'mem-2',
+        changedBy: 'pm-1',
+        reason: 'Lagi sakit',
+        changedAt: serverTimestamp(),
+      }),
+    );
+
+    // Activity logs: active member allowed, outsider denied
+    await assertSucceeds(
+      setDoc(doc(memDb, 'workspaces/ws-1/activityLogs/log-1'), {
+        workspaceId: 'ws-1',
+        userId: 'mem-1',
+        taskId: 't1',
+        activityType: 'comment_added',
+        description: 'Menambahkan komentar',
+        createdAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      setDoc(doc(outsiderDb, 'workspaces/ws-1/activityLogs/log-2'), {
+        workspaceId: 'ws-1',
+        userId: 'outsider',
+        taskId: 't1',
+        activityType: 'comment_added',
+        description: 'Spam log',
+        createdAt: serverTimestamp(),
+      }),
+    );
   });
 });

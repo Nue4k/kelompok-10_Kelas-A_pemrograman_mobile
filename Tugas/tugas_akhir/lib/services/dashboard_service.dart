@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/exceptions/task_exception.dart';
+import '../core/utils/firestore_converters.dart';
 import '../data/models/dashboard_summary_model.dart';
 import '../data/models/enums.dart';
 import '../data/models/task_filter.dart';
@@ -24,13 +25,11 @@ class DashboardService {
   final WorkspaceMemberRepository _memberRepository;
   final FirebaseAuth _auth;
 
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
   /// Validates [filter] before executing a query.
   static void validateFilter(TaskFilter filter) {
     if (filter.deadlineFrom != null && filter.deadlineTo != null) {
-      final from = _dateOnly(filter.deadlineFrom!);
-      final to = _dateOnly(filter.deadlineTo!);
+      final from = dateOnly(filter.deadlineFrom!);
+      final to = dateOnly(filter.deadlineTo!);
       if (to.isBefore(from)) {
         throw const TaskException(
           code: 'invalid-date-range',
@@ -81,16 +80,30 @@ class DashboardService {
     }
   }
 
+  Stream<T> _mapStreamErrors<T>(Stream<T> stream) {
+    return stream.handleError((Object error, StackTrace stackTrace) {
+      if (error is FirebaseException) {
+        Error.throwWithStackTrace(
+          TaskException.fromFirebase(error),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
   Stream<DashboardSummaryModel> watchWorkspaceDashboard(
     String workspaceId, {
     bool onlyMyTasks = false,
     DateTime? now,
   }) {
     final uid = _requireUid();
-    return _dashboardRepository.watchWorkspaceSummary(
-      workspaceId,
-      picMemberId: onlyMyTasks ? uid : null,
-      now: now,
+    return _mapStreamErrors(
+      _dashboardRepository.watchWorkspaceSummary(
+        workspaceId,
+        picMemberId: onlyMyTasks ? uid : null,
+        now: now,
+      ),
     );
   }
 
@@ -119,10 +132,12 @@ class DashboardService {
   }) {
     _requireUid();
     validateFilter(filter);
-    return _dashboardRepository.watchFilteredTasks(
-      workspaceId,
-      filter: filter,
-      now: now,
+    return _mapStreamErrors(
+      _dashboardRepository.watchFilteredTasks(
+        workspaceId,
+        filter: filter,
+        now: now,
+      ),
     );
   }
 }

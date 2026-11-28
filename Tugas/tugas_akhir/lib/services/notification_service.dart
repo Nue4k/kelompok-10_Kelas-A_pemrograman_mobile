@@ -36,15 +36,29 @@ class NotificationService {
     return uid;
   }
 
+  Stream<T> _mapStreamErrors<T>(Stream<T> stream) {
+    return stream.handleError((Object error, StackTrace stackTrace) {
+      if (error is FirebaseException) {
+        Error.throwWithStackTrace(
+          NotificationException.fromFirebase(error),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
   Stream<List<NotificationModel>> watchMyNotifications({
     bool unreadOnly = false,
     int limit = 50,
   }) {
     final uid = _requireUid();
-    return _notificationRepository.watchNotifications(
-      uid,
-      unreadOnly: unreadOnly,
-      limit: limit,
+    return _mapStreamErrors(
+      _notificationRepository.watchNotifications(
+        uid,
+        unreadOnly: unreadOnly,
+        limit: limit,
+      ),
     );
   }
 
@@ -74,7 +88,9 @@ class NotificationService {
     int limit = 50,
   }) {
     _requireUid();
-    return _activityLogRepository.watchActivityLogs(workspaceId, limit: limit);
+    return _mapStreamErrors(
+      _activityLogRepository.watchActivityLogs(workspaceId, limit: limit),
+    );
   }
 
   DeadlineReminderResult checkDeadlineReminders(

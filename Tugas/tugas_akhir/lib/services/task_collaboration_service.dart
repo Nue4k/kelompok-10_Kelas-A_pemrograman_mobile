@@ -181,6 +181,24 @@ class TaskCollaborationService {
     return task;
   }
 
+  Future<void> _bestEffort(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {}
+  }
+
+  Stream<T> _mapStreamErrors<T>(Stream<T> stream) {
+    return stream.handleError((Object error, StackTrace stackTrace) {
+      if (error is FirebaseException) {
+        Error.throwWithStackTrace(
+          TaskException.fromFirebase(error),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
   Future<void> _notifyActivePms({
     required String workspaceId,
     required String taskId,
@@ -226,20 +244,24 @@ class TaskCollaborationService {
         userId: member.userId,
         commentText: validText,
       );
-      await _activityLogRepository.createLog(
-        workspaceId: workspaceId,
-        userId: member.userId,
-        taskId: taskId,
-        activityType: ActivityType.commentAdded,
-        description: 'Menambahkan komentar pada tugas "${task.title}".',
+      await _bestEffort(
+        () => _activityLogRepository.createLog(
+          workspaceId: workspaceId,
+          userId: member.userId,
+          taskId: taskId,
+          activityType: ActivityType.commentAdded,
+          description: 'Menambahkan komentar pada tugas "${task.title}".',
+        ),
       );
       if (task.picMemberId != member.userId) {
-        await _notificationRepository.createNotification(
-          userId: task.picMemberId,
-          workspaceId: workspaceId,
-          taskId: taskId,
-          type: NotificationType.commentAdded,
-          message: 'Komentar baru pada tugas "${task.title}".',
+        await _bestEffort(
+          () => _notificationRepository.createNotification(
+            userId: task.picMemberId,
+            workspaceId: workspaceId,
+            taskId: taskId,
+            type: NotificationType.commentAdded,
+            message: 'Komentar baru pada tugas "${task.title}".',
+          ),
         );
       }
       return comment;
@@ -323,10 +345,17 @@ class TaskCollaborationService {
 
   Stream<List<TaskCommentModel>> watchComments(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 100,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchComments(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchComments(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -349,12 +378,14 @@ class TaskCollaborationService {
         uploadedBy: member.userId,
         fileUrl: validUrl,
       );
-      await _activityLogRepository.createLog(
-        workspaceId: workspaceId,
-        userId: member.userId,
-        taskId: taskId,
-        activityType: ActivityType.attachmentAdded,
-        description: 'Menambahkan lampiran pada tugas "${task.title}".',
+      await _bestEffort(
+        () => _activityLogRepository.createLog(
+          workspaceId: workspaceId,
+          userId: member.userId,
+          taskId: taskId,
+          activityType: ActivityType.attachmentAdded,
+          description: 'Menambahkan lampiran pada tugas "${task.title}".',
+        ),
       );
       return attachment;
     } on FirebaseException catch (e) {
@@ -399,10 +430,17 @@ class TaskCollaborationService {
 
   Stream<List<TaskAttachmentModel>> watchAttachments(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchAttachments(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchAttachments(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -411,10 +449,17 @@ class TaskCollaborationService {
 
   Stream<List<TaskStatusHistoryModel>> watchStatusHistory(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchStatusHistory(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchStatusHistory(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 
   Future<TaskReviewModel> submitForReview({
@@ -452,19 +497,23 @@ class TaskCollaborationService {
             ? null
             : trimmedNotes,
       );
-      await _activityLogRepository.createLog(
-        workspaceId: workspaceId,
-        userId: member.userId,
-        taskId: taskId,
-        activityType: ActivityType.taskStatusChanged,
-        description: 'Mengajukan review untuk tugas "${task.title}".',
+      await _bestEffort(
+        () => _activityLogRepository.createLog(
+          workspaceId: workspaceId,
+          userId: member.userId,
+          taskId: taskId,
+          activityType: ActivityType.taskStatusChanged,
+          description: 'Mengajukan review untuk tugas "${task.title}".',
+        ),
       );
-      await _notifyActivePms(
-        workspaceId: workspaceId,
-        taskId: taskId,
-        excludeUserId: member.userId,
-        type: NotificationType.reviewRequested,
-        message: 'Tugas "${task.title}" menunggu review Anda.',
+      await _bestEffort(
+        () => _notifyActivePms(
+          workspaceId: workspaceId,
+          taskId: taskId,
+          excludeUserId: member.userId,
+          type: NotificationType.reviewRequested,
+          message: 'Tugas "${task.title}" menunggu review Anda.',
+        ),
       );
       return review;
     } on FirebaseException catch (e) {
@@ -518,26 +567,30 @@ class TaskCollaborationService {
         feedback: validFeedback,
       );
       final isApproved = decision == ReviewDecision.approved;
-      await _activityLogRepository.createLog(
-        workspaceId: workspaceId,
-        userId: pm.userId,
-        taskId: taskId,
-        activityType: ActivityType.taskReviewed,
-        description: isApproved
-            ? 'Menyetujui tugas "${task.title}".'
-            : 'Meminta revisi pada tugas "${task.title}".',
+      await _bestEffort(
+        () => _activityLogRepository.createLog(
+          workspaceId: workspaceId,
+          userId: pm.userId,
+          taskId: taskId,
+          activityType: ActivityType.taskReviewed,
+          description: isApproved
+              ? 'Menyetujui tugas "${task.title}".'
+              : 'Meminta revisi pada tugas "${task.title}".',
+        ),
       );
       if (task.picMemberId != pm.userId) {
-        await _notificationRepository.createNotification(
-          userId: task.picMemberId,
-          workspaceId: workspaceId,
-          taskId: taskId,
-          type: isApproved
-              ? NotificationType.taskApproved
-              : NotificationType.revisionRequested,
-          message: isApproved
-              ? 'Tugas "${task.title}" telah disetujui.'
-              : 'Tugas "${task.title}" perlu revisi.',
+        await _bestEffort(
+          () => _notificationRepository.createNotification(
+            userId: task.picMemberId,
+            workspaceId: workspaceId,
+            taskId: taskId,
+            type: isApproved
+                ? NotificationType.taskApproved
+                : NotificationType.revisionRequested,
+            message: isApproved
+                ? 'Tugas "${task.title}" telah disetujui.'
+                : 'Tugas "${task.title}" perlu revisi.',
+          ),
         );
       }
     } on FirebaseException catch (e) {
@@ -547,10 +600,17 @@ class TaskCollaborationService {
 
   Stream<List<TaskReviewModel>> watchReviews(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchReviews(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchReviews(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -595,12 +655,14 @@ class TaskCollaborationService {
         proposedPicId: trimmedProposed,
         reason: validReason,
       );
-      await _notifyActivePms(
-        workspaceId: workspaceId,
-        taskId: taskId,
-        excludeUserId: member.userId,
-        type: NotificationType.picChangeRequested,
-        message: 'Ada permintaan ganti PIC untuk tugas "${task.title}".',
+      await _bestEffort(
+        () => _notifyActivePms(
+          workspaceId: workspaceId,
+          taskId: taskId,
+          excludeUserId: member.userId,
+          type: NotificationType.picChangeRequested,
+          message: 'Ada permintaan ganti PIC untuk tugas "${task.title}".',
+        ),
       );
       return request;
     } on FirebaseException catch (e) {
@@ -654,20 +716,24 @@ class TaskCollaborationService {
         newPicId: request.proposedPicId,
         reason: request.reason,
       );
-      await _activityLogRepository.createLog(
-        workspaceId: workspaceId,
-        userId: pm.userId,
-        taskId: taskId,
-        activityType: ActivityType.picChanged,
-        description: 'Mengganti PIC pada tugas "${task.title}".',
+      await _bestEffort(
+        () => _activityLogRepository.createLog(
+          workspaceId: workspaceId,
+          userId: pm.userId,
+          taskId: taskId,
+          activityType: ActivityType.picChanged,
+          description: 'Mengganti PIC pada tugas "${task.title}".',
+        ),
       );
       if (request.proposedPicId != pm.userId) {
-        await _notificationRepository.createNotification(
-          userId: request.proposedPicId,
-          workspaceId: workspaceId,
-          taskId: taskId,
-          type: NotificationType.taskAssigned,
-          message: 'Anda ditunjuk sebagai PIC baru untuk tugas "${task.title}".',
+        await _bestEffort(
+          () => _notificationRepository.createNotification(
+            userId: request.proposedPicId,
+            workspaceId: workspaceId,
+            taskId: taskId,
+            type: NotificationType.taskAssigned,
+            message: 'Anda ditunjuk sebagai PIC baru untuk tugas "${task.title}".',
+          ),
         );
       }
     } on FirebaseException catch (e) {
@@ -713,17 +779,31 @@ class TaskCollaborationService {
 
   Stream<List<PicChangeRequestModel>> watchPicChangeRequests(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchPicChangeRequests(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchPicChangeRequests(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 
   Stream<List<TaskAssignmentHistoryModel>> watchAssignmentHistory(
     String workspaceId,
-    String taskId,
-  ) {
+    String taskId, {
+    int limit = 50,
+  }) {
     _requireUid();
-    return _collaborationRepository.watchAssignmentHistory(workspaceId, taskId);
+    return _mapStreamErrors(
+      _collaborationRepository.watchAssignmentHistory(
+        workspaceId,
+        taskId,
+        limit: limit,
+      ),
+    );
   }
 }

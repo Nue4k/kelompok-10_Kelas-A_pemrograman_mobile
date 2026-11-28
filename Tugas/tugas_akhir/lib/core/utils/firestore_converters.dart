@@ -12,3 +12,6 @@ Timestamp? dateToFirestore(DateTime? date) {
   if (date == null) return null;
   return Timestamp.fromDate(date);
 }
+
+/// Returns the local calendar date (midnight) for [dt].
+DateTime dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);

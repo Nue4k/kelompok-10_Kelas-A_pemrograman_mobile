@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/constants/firestore_collections.dart';
+import '../../core/utils/firestore_converters.dart';
 import '../models/dashboard_summary_model.dart';
 import '../models/enums.dart';
 import '../models/task_filter.dart';
@@ -27,8 +28,6 @@ class DashboardRepository {
           .doc(workspaceId)
           .collection(FirestoreCollections.tasks);
 
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
   /// Fetches aggregated task counts for a workspace using Firestore `count()`.
   ///
   /// When [picMemberId] is provided, counts are scoped to that PIC.
@@ -46,7 +45,7 @@ class DashboardRepository {
     }
 
     final ref = now ?? DateTime.now();
-    final startOfToday = _dateOnly(ref);
+    final startOfToday = dateOnly(ref);
     final startOfTomorrow = startOfToday.add(const Duration(days: 1));
     final startOfDayAfterTomorrow = startOfToday.add(const Duration(days: 2));
 
@@ -164,11 +163,11 @@ class DashboardRepository {
       query = query.where(
         'deadline',
         isGreaterThanOrEqualTo:
-            Timestamp.fromDate(_dateOnly(filter.deadlineFrom!)),
+            Timestamp.fromDate(dateOnly(filter.deadlineFrom!)),
       );
     }
     if (filter.deadlineTo != null) {
-      final exclusiveEnd = _dateOnly(filter.deadlineTo!).add(
+      final exclusiveEnd = dateOnly(filter.deadlineTo!).add(
         const Duration(days: 1),
       );
       query = query.where(

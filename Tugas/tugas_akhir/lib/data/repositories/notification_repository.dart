@@ -72,16 +72,23 @@ class NotificationRepository {
     });
   }
 
+  static const int _maxBatchSize = 450;
+
   Future<void> markAllAsRead(String userId) async {
     final unreadSnap = await _notificationsRef(userId)
         .where('isRead', isEqualTo: false)
         .get();
     if (unreadSnap.docs.isEmpty) return;
 
-    final batch = _firestore.batch();
-    for (final doc in unreadSnap.docs) {
-      batch.update(doc.reference, {'isRead': true});
+    final docs = unreadSnap.docs;
+    for (var i = 0; i < docs.length; i += _maxBatchSize) {
+      final end =
+          (i + _maxBatchSize < docs.length) ? i + _maxBatchSize : docs.length;
+      final batch = _firestore.batch();
+      for (var j = i; j < end; j++) {
+        batch.update(docs[j].reference, {'isRead': true});
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 }

@@ -66,35 +66,98 @@ class WorkspaceMemberRepository {
   }
 
   /// Updates a member's role (`pm` or `member`).
+  ///
+  /// When [activePmUserIds] is provided and [newRole] is not `pm`, verifies
+  /// inside a Firestore transaction that the workspace still has at least one
+  /// other active PM.
   Future<void> updateMemberRole({
     required String workspaceId,
     required String userId,
     required MemberRole newRole,
+    List<String>? activePmUserIds,
   }) async {
-    await _membersRef(workspaceId).doc(userId).update({
-      'role': newRole.value,
+    if (activePmUserIds == null || newRole == MemberRole.pm) {
+      await _membersRef(workspaceId).doc(userId).update({
+        'role': newRole.value,
+      });
+      return;
+    }
+
+    await _firestore.runTransaction((tx) async {
+      await _verifyNotLastPmInTransaction(
+        tx,
+        workspaceId: workspaceId,
+        targetUserId: userId,
+        candidatePmIds: activePmUserIds,
+      );
+      tx.update(_membersRef(workspaceId).doc(userId), {
+        'role': newRole.value,
+      });
     });
   }
 
   /// Soft-removes a member by setting `status` to `removed` and `removedAt`.
+  ///
+  /// When [activePmUserIds] is provided, verifies inside a Firestore
+  /// transaction that the workspace still has at least one other active PM.
   Future<void> removeMember({
     required String workspaceId,
     required String userId,
+    List<String>? activePmUserIds,
   }) async {
-    await _membersRef(workspaceId).doc(userId).update({
-      'status': MemberStatus.removed.value,
-      'removedAt': FieldValue.serverTimestamp(),
+    if (activePmUserIds == null) {
+      await _membersRef(workspaceId).doc(userId).update({
+        'status': MemberStatus.removed.value,
+        'removedAt': FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    await _firestore.runTransaction((tx) async {
+      await _verifyNotLastPmInTransaction(
+        tx,
+        workspaceId: workspaceId,
+        targetUserId: userId,
+        candidatePmIds: activePmUserIds,
+      );
+      tx.update(_membersRef(workspaceId).doc(userId), {
+        'status': MemberStatus.removed.value,
+        'removedAt': FieldValue.serverTimestamp(),
+      });
     });
   }
 
-  /// Fetches a user's join request for a workspace, if any.
-  Future<JoinRequestModel?> getJoinRequest(
-    String workspaceId,
-    String userId,
-  ) async {
-    final doc = await _joinRequestsRef(workspaceId).doc(userId).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return JoinRequestModel.fromFirestore(doc);
+  Future<void> _verifyNotLastPmInTransaction(
+    Transaction tx, {
+    required String workspaceId,
+    required String targetUserId,
+    required List<String> candidatePmIds,
+  }) async {
+    final idsToCheck = {...candidatePmIds, targetUserId};
+    var activePmCount = 0;
+    var targetIsActivePm = false;
+
+    for (final id in idsToCheck) {
+      final snap = await tx.get(_membersRef(workspaceId).doc(id));
+      final data = snap.data();
+      if (!snap.exists || data == null) continue;
+      final isActivePm = data['status'] == MemberStatus.active.value &&
+          data['role'] == MemberRole.pm.value;
+      if (isActivePm) {
+        activePmCount++;
+        if (id == targetUserId) {
+          targetIsActivePm = true;
+        }
+      }
+    }
+
+    if (targetIsActivePm && activePmCount <= 1) {
+      throw const WorkspaceException(
+        code: 'last-pm-protected',
+        message:
+            'Workspace harus memiliki minimal 1 PM aktif. Tunjuk PM lain terlebih dahulu.',
+      );
+    }
   }
 
   /// Watches pending join requests ordered by `requestedAt` descending.
