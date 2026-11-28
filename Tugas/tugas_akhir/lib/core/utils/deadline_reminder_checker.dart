@@ -1,5 +1,6 @@
 import '../../data/models/enums.dart';
 import '../../data/models/task_model.dart';
+import 'firestore_converters.dart';
 
 /// Result of scanning tasks for upcoming H-1 deadlines and overdue items.
 class DeadlineReminderResult {
@@ -17,8 +18,6 @@ class DeadlineReminderResult {
 
 /// Client-side helper to detect H-1 deadlines and overdue tasks.
 abstract final class DeadlineReminderChecker {
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
   /// Returns `true` if [task] is active (not done, not archived) and its
   /// deadline falls on tomorrow's calendar date relative to [now].
   static bool isDueTomorrow(TaskModel task, {DateTime? now}) {
@@ -27,9 +26,9 @@ abstract final class DeadlineReminderChecker {
         task.isArchived) {
       return false;
     }
-    final today = _dateOnly(now ?? DateTime.now());
+    final today = dateOnly(now ?? DateTime.now());
     final tomorrow = today.add(const Duration(days: 1));
-    final dueDate = _dateOnly(task.deadline!);
+    final dueDate = dateOnly(task.deadline!);
     return dueDate == tomorrow;
   }
 
@@ -41,8 +40,8 @@ abstract final class DeadlineReminderChecker {
         task.isArchived) {
       return false;
     }
-    final today = _dateOnly(now ?? DateTime.now());
-    final dueDate = _dateOnly(task.deadline!);
+    final today = dateOnly(now ?? DateTime.now());
+    final dueDate = dateOnly(task.deadline!);
     return dueDate.isBefore(today);
   }
 

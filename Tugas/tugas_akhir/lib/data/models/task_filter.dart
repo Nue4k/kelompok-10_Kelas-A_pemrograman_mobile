@@ -1,4 +1,5 @@
 import '../../core/utils/deadline_reminder_checker.dart';
+import '../../core/utils/firestore_converters.dart';
 import 'enums.dart';
 import 'task_model.dart';
 
@@ -68,8 +69,6 @@ class TaskFilter {
     );
   }
 
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
   bool matches(TaskModel task, {DateTime? now}) {
     if (!includeArchived && task.isArchived) return false;
     if (status != null && task.status != status) return false;
@@ -88,11 +87,11 @@ class TaskFilter {
 
     if (deadlineFrom != null || deadlineTo != null) {
       if (task.deadline == null) return false;
-      final dueDate = _dateOnly(task.deadline!);
-      if (deadlineFrom != null && dueDate.isBefore(_dateOnly(deadlineFrom!))) {
+      final dueDate = dateOnly(task.deadline!);
+      if (deadlineFrom != null && dueDate.isBefore(dateOnly(deadlineFrom!))) {
         return false;
       }
-      if (deadlineTo != null && dueDate.isAfter(_dateOnly(deadlineTo!))) {
+      if (deadlineTo != null && dueDate.isAfter(dateOnly(deadlineTo!))) {
         return false;
       }
     }

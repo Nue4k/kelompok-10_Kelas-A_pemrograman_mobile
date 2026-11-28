@@ -59,5 +59,33 @@ void main() {
       expect(logs, hasLength(1));
       expect(logs.first.description, 'PM membuat tugas');
     });
+
+    test('markAllAsRead handles more than 500 unread notifications in chunks',
+        () async {
+      for (var i = 0; i < 520; i++) {
+        await firestore
+            .collection('users')
+            .doc('u-bulk')
+            .collection('notifications')
+            .doc('n-$i')
+            .set({
+          'userId': 'u-bulk',
+          'workspaceId': 'ws-1',
+          'type': NotificationType.taskAssigned.value,
+          'message': 'Notif $i',
+          'isRead': false,
+        });
+      }
+
+      await notificationRepo.markAllAsRead('u-bulk');
+
+      final unreadAfter = await firestore
+          .collection('users')
+          .doc('u-bulk')
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+      expect(unreadAfter.docs, isEmpty);
+    });
   });
 }
